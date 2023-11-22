@@ -1,38 +1,41 @@
 <?php
-include("../connectiones/db_connection.php");
-include("userfunctions.php");
+require_once '../connections/db_connection.php';
+require_once '../includes/functions.php';
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = $_POST["username"];
-    $password = $_POST["password"];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = sanitizeInput($_POST['log_username']);
+    $password = isset($_POST['log_password']) ? $_POST['log_password'] : '';
 
-    try {
-        // Check if the username exists in the database
-        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Perform form validation
+    $errors = [];
 
-        if ($user && password_verify($password, $user['password'])) {
-            session_start();
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            
-            // Redirect to a welcome or dashboard page
-            header("Location: ../home.php");
+    if (empty($username)) {
+        $errors['log_username'] = 'Username is required.';
+    }
+
+    if (empty($password)) {
+        $errors['log_password'] = 'Password is required.';
+    }
+
+    // If there are no validation errors, proceed with user login
+    if (empty($errors)) {
+        $stmt = $conn->prepare("SELECT * FROM users WHERE user_name = :log_username");
+        $stmt->bindParam(':log_username', $username);
+        $stmt->execute();
+        $user = $stmt->fetch();
+
+        if ($user && verifyHash($password, $user['log_password'])) {
+            // Start a session and set session variables
+            startSession();
+            setSession('id', $user['user_id']);
+            setSession('log_username', $user['user_name']);
+
+            // Assuming the username is stored in a variable $username
+            header("Location: ../home.php?username=" . urlencode($username));
             exit();
         } else {
-            // Invalid credentials
-            header("Location: ../login.php?error=invalid");
-            exit();
+            $errors['login'] = 'Invalid username or password.';
         }
-    } catch (PDOException $e) {
-        // Handle database error
-        header("Location: ../login.php?error=db");
-        exit();
     }
-} else {
-    // Redirect to the login page if accessed directly
-    header("Location: ../login.php");
-    exit();
 }
 ?>
